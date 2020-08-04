@@ -1,5 +1,6 @@
-﻿using System.IO;
+﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace File_Parser
@@ -64,7 +65,7 @@ namespace File_Parser
         {
             List<string> comments = new List<string>() { "//", "/*", "*", "*/" };
             List<string> classes = new List<string>() { "class", "interface", "struct" };
-            List<string> controls = new List<string>() { "if", "for", "foreach", "while", "catch", "using" };
+            List<string> controls = new List<string>() { "if", "for", "foreach", "while", "catch" };
             if (comments.Any(semi => line.StartsWith(semi)))
             {
                 if (line.Contains("@info"))
@@ -85,13 +86,17 @@ namespace File_Parser
             {
                 return "namespace";
             }
-            if (classes.Any(semi => line.Contains(semi)))
+            if (Array.Exists(line.Split(' '), word => classes.Any(semi => semi.Equals(word))))
             {
                 return "class";
             }
-            if (controls.Any(semi => line.Contains(semi)))
+            if (controls.Any(semi => line.StartsWith(semi)))
             {
                 return "control";
+            }
+            if (line.StartsWith("using"))
+            {
+                return "using";
             }
             if (line.StartsWith("{"))
             {
@@ -118,7 +123,7 @@ namespace File_Parser
             foreach (var line in fileLines.Select((value, index) => new { index, value }))
             {
                 string lineType = ClassifyLine(line.value.Trim());
-                if (lineType == "control" && line.value.Trim().StartsWith("using"))
+                if (lineType == "dependency")
                 {
                     fileContents.dependencies.Add(line.value.Trim().Replace("using", "").Replace(";",""));
                 }
@@ -136,6 +141,7 @@ namespace File_Parser
             return fileContents;
         }
 
+#if(TEST_PARSER)
         static void Main(string[] args)
         {
             Parser parser = new Parser();
@@ -145,5 +151,6 @@ namespace File_Parser
                 FileContents fileContents = parser.CreateFileContents(file);
             }
         }
+#endif
     }
 }
