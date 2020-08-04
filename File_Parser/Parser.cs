@@ -19,6 +19,8 @@ namespace File_Parser
         {
             public string directory;
             public List<LineDetails> lines;
+            public List<string> dependencies;
+            public List<string> availableNamespaces;
         }
 
         // Method to check if the directory is an excluded directory type
@@ -32,12 +34,10 @@ namespace File_Parser
         public List<string> FindFilesInDirectory(string directory)
         {
             List<string> files = new List<string>();
-
             foreach (string file in Directory.GetFiles(directory, "*.cs"))
             {
                 files.Add(file);
             }
-
             foreach (string dir in Directory.GetDirectories(directory).Where(dir => !IsExcludedDirectory(dir)))
             {
                 files = files.Concat<string>(FindFilesInDirectory(dir)).ToList();
@@ -62,40 +62,45 @@ namespace File_Parser
         // Method to classify each line and return the FileContents struct
         public string ClassifyLine(string line)
         {
-            List<string> comments = new List<string>() { "//", "/*", "*" };
+            List<string> comments = new List<string>() { "//", "/*", "*", "*/" };
             List<string> classes = new List<string>() { "class", "interface", "struct" };
             List<string> controls = new List<string>() { "if", "for", "foreach", "while", "catch", "using" };
-
             if (comments.Any(semi => line.StartsWith(semi)))
             {
+                if (line.Contains("@info"))
+                {
+                    return "infoComment";
+                }
+                if (line.Contains("@warning"))
+                {
+                    return "warningComment";
+                }
+                if (line.Contains("*/"))
+                {
+                    return "commentEnd";
+                }
                 return "comment";
             }
-
             if (line.StartsWith("namespace"))
             {
                 return "namespace";
             }
-
             if (classes.Any(semi => line.Contains(semi)))
             {
                 return "class";
             }
-
             if (controls.Any(semi => line.Contains(semi)))
             {
                 return "control";
             }
-
             if (line.StartsWith("{"))
             {
                 return "startScope";
             }
-
             if (line.StartsWith("}"))
             {
                 return "endScope";
             }
-
             return "line";
         }
 
@@ -105,16 +110,27 @@ namespace File_Parser
             FileContents fileContents = new FileContents
             {
                 directory = file,
-                lines = new List<LineDetails>()
+                lines = new List<LineDetails>(),
+                dependencies = new List<string>(),
+                availableNamespaces = new List<string>()
             };
             List<string> fileLines = ReadFile(file);
             foreach (var line in fileLines.Select((value, index) => new { index, value }))
             {
+                string lineType = ClassifyLine(line.value.Trim());
+                if (lineType == "control" && line.value.Trim().StartsWith("using"))
+                {
+                    fileContents.dependencies.Add(line.value.Trim().Replace("using", "").Replace(";",""));
+                }
+                if(lineType == "namespace")
+                {
+                    fileContents.availableNamespaces.Add(line.value.Trim().Replace("namespace",""));
+                }
                 fileContents.lines.Add(new LineDetails
                 {
                     line = line.value,
-                    lineNumber = line.index + 1,
-                    lineType = ClassifyLine(line.value.Trim())
+                    lineNumber = line.index,
+                    lineType = lineType
                 });
             }
             return fileContents;
