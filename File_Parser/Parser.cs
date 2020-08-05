@@ -22,6 +22,7 @@ namespace File_Parser
             public List<LineDetails> lines;
             public List<string> dependencies;
             public List<string> availableNamespaces;
+            public List<string> projectFileDependencies;
         }
 
         // Method to check if the directory is an excluded directory type
@@ -68,15 +69,15 @@ namespace File_Parser
             List<string> controls = new List<string>() { "if", "for", "foreach", "while", "catch" };
             if (comments.Any(semi => line.StartsWith(semi)))
             {
-                if (line.Contains("@info"))
+                if (line.StartsWith("/*=INFO"))
                 {
                     return "infoComment";
                 }
-                if (line.Contains("@warning"))
+                if (line.StartsWith("/*=WARNING"))
                 {
                     return "warningComment";
                 }
-                if (line.Contains("*/"))
+                if (line.StartsWith("*/"))
                 {
                     return "commentEnd";
                 }
@@ -96,7 +97,7 @@ namespace File_Parser
             }
             if (line.StartsWith("using"))
             {
-                return "using";
+                return "dependency";
             }
             if (line.StartsWith("{"))
             {
@@ -117,7 +118,8 @@ namespace File_Parser
                 directory = file,
                 lines = new List<LineDetails>(),
                 dependencies = new List<string>(),
-                availableNamespaces = new List<string>()
+                availableNamespaces = new List<string>(),
+                projectFileDependencies = new List<string>()
             };
             List<string> fileLines = ReadFile(file);
             foreach (var line in fileLines.Select((value, index) => new { index, value }))
@@ -139,6 +141,33 @@ namespace File_Parser
                 });
             }
             return fileContents;
+        }
+
+        // Method to check if files are dependent
+        public bool HasDependency (List<string> dependencies, List<string> namespaces)
+        {
+            return dependencies.Select(dependency => dependency).Intersect(namespaces).Any();
+        }
+
+        // Method to create list of FileContents when given multiple files
+        public List<FileContents> ProcessFiles(List<string> files)
+        {
+            List<FileContents> processedFiles = new List<FileContents>();
+            foreach (string file in files)
+            {
+                processedFiles.Add(CreateFileContents(file));
+            }
+            foreach (FileContents file in processedFiles)
+            {
+                foreach (FileContents file2 in processedFiles)
+                {
+                    if (HasDependency(file.dependencies, file2.availableNamespaces))
+                    {
+                        file.projectFileDependencies.Add(file2.directory);
+                    }
+                }
+            }
+            return processedFiles;
         }
 
 #if(TEST_PARSER)

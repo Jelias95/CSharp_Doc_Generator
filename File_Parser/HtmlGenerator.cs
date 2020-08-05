@@ -1,10 +1,12 @@
-﻿using File_Parser;
-using System;
+﻿/*=INFO
+ * For ease of use - anonymous controls will use the previous line as a trigger
+ * Continuing comment
+ */
+
+using File_Parser;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Html_Generator
 {
@@ -58,45 +60,89 @@ namespace Html_Generator
             return false;
         }
 
+        // Function to encode special HTML characters
+        public string EncodeHtml (string line)
+        {
+            return line.Replace("&", "&amp").Replace("<", "&lt").Replace(">", "&gt");
+        }
+
+        // Function to determine the comment type and style accordingly
+        public string StyleComment (Parser.LineDetails comment)
+        {
+            if (comment.lineType == "infoComment")
+            {
+                return "<div class='infobox'>" + EncodeHtml(comment.line);
+            }
+            if (comment.lineType == "warningComment")
+            {
+                return "<div class='dangerbox'>" + EncodeHtml(comment.line);
+            }
+            if (comment.lineType == "commentEnd")
+            {
+                return EncodeHtml(comment.line) + "</div>";
+            }
+            return EncodeHtml(comment.line);
+        }
+
+        // Function to generate headerbox with links to project dependencies
+        public string CreateHeaderBox (List<string> dependencies, string directory)
+        {
+            string headerbox = "<div class='headerbox'>\n";
+            foreach (string dependency in dependencies)
+            {
+                headerbox += "<p><a href='"
+                    + directory
+                    + Path.GetFileNameWithoutExtension(dependency)
+                    + ".html'>"
+                    + Path.GetFileNameWithoutExtension(dependency)
+                    + "</a></p>\n";
+            }
+            headerbox += "</div>\n";
+            return headerbox;
+        }
+
         // Function to create HTML file
-        public void CreateFile (string fileName, List<Parser.LineDetails> lines)
+        public void CreateHtmlFile (Parser.FileContents fileContents)
         {
             DirectoryInfo dir = Directory.CreateDirectory("../../../htmlFiles/");
             string di = dir.FullName;
-            StreamWriter file = new StreamWriter(di + fileName + @".html", false);
+            StreamWriter file = new StreamWriter(di + Path.GetFileNameWithoutExtension(fileContents.directory) + @".html", false);
             file.WriteLine(CreateHeader());
             file.WriteLine("<body>");
-            foreach (Parser.LineDetails line in lines)
+            file.WriteLine(CreateHeaderBox(fileContents.projectFileDependencies, di));
+            foreach (Parser.LineDetails line in fileContents.lines)
             {
-                if ((line.lineNumber + 1) != lines.Count)
+                if ((line.lineNumber + 1) != fileContents.lines.Count && ShouldExpand(line.lineType, fileContents.lines[line.lineNumber + 1].lineType))
                 {
-                    if (ShouldExpand(line.lineType, lines[line.lineNumber + 1].lineType))
-                    {
-                        file.WriteLine("<div> <button type='button' class='btn btn-link' data-toggle='collapse' data-target='#scope"
-                            + line.lineNumber
-                            + "'>"
-                            + line.line
-                            + "</button> </div>"
-                        );
-                    }
-                    else if (line.lineType == "startScope")
-                    {
-                        file.WriteLine("<div id='scope"
-                            + (line.lineNumber - 1)
-                            + "' class='collapse'> <pre>"
-                            + line.line
-                        );
-                    }
-                    else if (line.lineType == "endScope")
-                    {
-                        file.WriteLine(line.line + "</pre> </div>");
-                    }
-                    else
-                    {
-                        file.WriteLine(line.line);
-                    }
+                    file.WriteLine("<div> <button type='button' class='btn btn-link' data-toggle='collapse' data-target='#scope"
+                        + line.lineNumber
+                        + "'>"
+                        + EncodeHtml(line.line)
+                        + "</button> </div>"
+                    );
+                }
+                else if (line.lineType == "startScope")
+                {
+                    file.WriteLine("<div id='scope"
+                        + (line.lineNumber - 1)
+                        + "' class='collapse'> <pre>"
+                        + EncodeHtml(line.line)
+                    );
+                }
+                else if (line.lineType == "endScope")
+                {
+                    file.WriteLine(EncodeHtml(line.line) + "</pre> </div>");
+                }
+                else if (line.lineType.Contains("omment"))
+                {
+                    file.WriteLine(StyleComment(line));
+                }
+                else
+                {
+                    file.WriteLine(EncodeHtml(line.line));
                 }
             }
+            file.WriteLine("</body></html>");
             file.Close();
         }
 
@@ -105,11 +151,10 @@ namespace Html_Generator
             Parser parser = new Parser();
             HtmlGenerator htmlGenerator = new HtmlGenerator();
             List<string> files = parser.FindFilesInDirectory("../../");
-            List<Parser.FileContents> fileDetails = new List<Parser.FileContents>();
-            foreach (string file in files)
+            List<Parser.FileContents> processedFiles = parser.ProcessFiles(files);
+            foreach (Parser.FileContents file in processedFiles)
             {
-                Parser.FileContents test = parser.CreateFileContents(file);
-                htmlGenerator.CreateFile(Path.GetFileNameWithoutExtension(test.directory), test.lines);
+                htmlGenerator.CreateHtmlFile(file);
             }
 
         }
